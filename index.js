@@ -10,17 +10,14 @@ async function startBot() {
         browser: ['Ubuntu', 'Chrome', '22.04.4']
     })
 
-    // ✅ Menampilkan QR code secara manual
     sock.ev.on('connection.update', (update) => {
         const { connection, qr, lastDisconnect } = update
-
         if (qr) {
-            console.log('\n🔒 Scan QR ini dengan WhatsApp:')
-            qrcode.generate(qr, { small: true })
+            console.log('\n🔒 Scan QR ini:')
+            qrcode.generate(qr, { small: true })  // Tampilkan QR code di terminal
         }
-
         if (connection === 'close') {
-            const shouldReconnect = (lastDisconnect?.error as Boom)?.output?.statusCode !== DisconnectReason.loggedOut
+            const shouldReconnect = new Boom(lastDisconnect?.error)?.output?.statusCode !== DisconnectReason.loggedOut
             console.log('❌ Koneksi terputus. Reconnect:', shouldReconnect)
             if (shouldReconnect) {
                 startBot()
@@ -31,35 +28,9 @@ async function startBot() {
     })
 
     sock.ev.on('creds.update', saveCreds)
-
-    // ✅ Balasan otomatis
-    sock.ev.on('messages.upsert', async ({ messages, type }) => {
-        if (type !== 'notify') return
-        const msg = messages[0]
-        if (!msg.message || msg.key.fromMe) return
-
-        const text = msg.message.conversation || msg.message.extendedTextMessage?.text
-        const sender = msg.key.remoteJid
-
-        const keywords = {
-            halo: 'Hai juga!',
-            pagi: 'Selamat pagi ☀️',
-            siang: 'Selamat siang 🌤️',
-            sore: 'Selamat sore 🌇',
-            malam: 'Selamat malam 🌙',
-            capek: 'Semangat ya! 💪',
-            sedih: 'Jangan sedih, aku ada kok 🥺',
-            salam: 'Waalaikumussalam',
-            bot: 'Aku di sini! 🤖'
-        }
-
-        const reply = keywords[text?.toLowerCase()]
-        if (reply) {
-            await sock.sendMessage(sender, { text: reply }, { quoted: msg })
-        }
-    })
 }
 
 startBot()
+
 
 
