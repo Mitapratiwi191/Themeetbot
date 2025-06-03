@@ -7,19 +7,20 @@ async function startBot() {
 
     const sock = makeWASocket({
         auth: state,
-        printQRInTerminal: false, // sudah deprecated
         browser: ['Ubuntu', 'Chrome', '22.04.4']
     })
 
-    // Tampilkan QR code secara manual
+    // ✅ Menampilkan QR code secara manual
     sock.ev.on('connection.update', (update) => {
         const { connection, qr, lastDisconnect } = update
+
         if (qr) {
-            console.log('\n💬 Scan QR ini dengan WhatsApp:')
+            console.log('\n🔒 Scan QR ini dengan WhatsApp:')
             qrcode.generate(qr, { small: true })
         }
+
         if (connection === 'close') {
-            const shouldReconnect = lastDisconnect?.error?.output?.statusCode !== DisconnectReason.loggedOut
+            const shouldReconnect = (lastDisconnect?.error as Boom)?.output?.statusCode !== DisconnectReason.loggedOut
             console.log('❌ Koneksi terputus. Reconnect:', shouldReconnect)
             if (shouldReconnect) {
                 startBot()
@@ -29,10 +30,9 @@ async function startBot() {
         }
     })
 
-    // Simpan auth state
     sock.ev.on('creds.update', saveCreds)
 
-    // Balas otomatis sesuai kata kunci
+    // ✅ Balasan otomatis
     sock.ev.on('messages.upsert', async ({ messages, type }) => {
         if (type !== 'notify') return
         const msg = messages[0]
@@ -61,4 +61,5 @@ async function startBot() {
 }
 
 startBot()
+
 
