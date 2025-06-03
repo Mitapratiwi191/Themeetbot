@@ -1,36 +1,52 @@
-const { default: makeWASocket, useMultiFileAuthState, DisconnectReason } = require('@whiskeysockets/baileys')
-const qrcode = require('qrcode-terminal')
-const { Boom } = require('@hapi/boom')
+const makeWASocket = require('@whiskeysockets/baileys').default;
+const { useSingleFileAuthState } = require('@whiskeysockets/baileys');
+const qrcode = require('qrcode-terminal');
 
-async function startBot() {
-    const { state, saveCreds } = await useMultiFileAuthState('auth_info')
+const { state, saveState } = useSingleFileAuthState('./auth_info.json');
 
-    const sock = makeWASocket({
-        auth: state,
-        browser: ['Ubuntu', 'Chrome', '22.04.4']
-    })
+const startBot = async () => {
+  const sock = makeWASocket({
+    auth: state,
+    printQRInTerminal: false,
+    browser: ['Ubuntu', 'Chrome', '22.04.4']
+  });
 
-    sock.ev.on('connection.update', (update) => {
-        const { connection, qr, lastDisconnect } = update
-        if (qr) {
-            console.log('\n🔒 Scan QR ini:')
-            qrcode.generate(qr, { small: true })  // Tampilkan QR code di terminal
-        }
-        if (connection === 'close') {
-            const shouldReconnect = new Boom(lastDisconnect?.error)?.output?.statusCode !== DisconnectReason.loggedOut
-            console.log('❌ Koneksi terputus. Reconnect:', shouldReconnect)
-            if (shouldReconnect) {
-                startBot()
-            }
-        } else if (connection === 'open') {
-            console.log('✅ Bot berhasil terhubung ke WhatsApp!')
-        }
-    })
+  sock.ev.on('creds.update', saveState);
 
-    sock.ev.on('creds.update', saveCreds)
-}
+  sock.ev.on('connection.update', (update) => {
+    const { connection, lastDisconnect, qr } = update;
 
-startBot()
+    if (qr) {
+      console.log('📲 Silakan scan QR berikut:');
+      qrcode.generate(qr, { small: true });
+    }
 
+    if (connection === 'open') {
+      console.log('✅ Bot berhasil terhubung ke WhatsApp!');
+    }
+
+    if (connection === 'close') {
+      console.log('❌ Koneksi terputus. Mencoba ulang...');
+      startBot();
+    }
+  });
+
+  sock.ev.on('messages.upsert', async ({ messages, type }) => {
+    if (type !== 'notify') return;
+    const msg = messages[0];
+    if (!msg.message) return;
+
+    const from = msg.key.remoteJid;
+    const body = msg.message.conversation || msg.message.extendedTextMessage?.text;
+
+    console.log(`📥 Pesan dari ${from}: ${body}`);
+
+    if (body === 'ping') {
+      await sock.sendMessage(from, { text: 'pong!' });
+    }
+  });
+};
+
+startBot();
 
 
