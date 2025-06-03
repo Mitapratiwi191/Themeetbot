@@ -1,43 +1,64 @@
-const { default: makeWASocket, useSingleFileAuthState, DisconnectReason } = require('@whiskeysockets/baileys')
-const { Boom } = require('@hapi/boom')
+const { default: makeWASocket, useMultiFileAuthState, DisconnectReason } = require('@whiskeysockets/baileys')
 const qrcode = require('qrcode-terminal')
+const { Boom } = require('@hapi/boom')
 
-// File untuk menyimpan sesi login
-const { state, saveState } = useSingleFileAuthState('./auth_info.json')
+async function startBot() {
+    const { state, saveCreds } = await useMultiFileAuthState('auth_info')
 
-async function startSock() {
-  const sock = makeWASocket({
-    auth: state,
-  })
+    const sock = makeWASocket({
+        auth: state,
+        printQRInTerminal: false, // sudah deprecated
+        browser: ['Ubuntu', 'Chrome', '22.04.4']
+    })
 
-  sock.ev.on('connection.update', (update) => {
-    const { connection, lastDisconnect, qr } = update
+    // Tampilkan QR code secara manual
+    sock.ev.on('connection.update', (update) => {
+        const { connection, qr, lastDisconnect } = update
+        if (qr) {
+            console.log('\n💬 Scan QR ini dengan WhatsApp:')
+            qrcode.generate(qr, { small: true })
+        }
+        if (connection === 'close') {
+            const shouldReconnect = lastDisconnect?.error?.output?.statusCode !== DisconnectReason.loggedOut
+            console.log('❌ Koneksi terputus. Reconnect:', shouldReconnect)
+            if (shouldReconnect) {
+                startBot()
+            }
+        } else if (connection === 'open') {
+            console.log('✅ Bot berhasil terhubung ke WhatsApp!')
+        }
+    })
 
-    if (qr) {
-      // Kalau sesi belum ada atau perlu scan ulang, tampilkan QR di terminal
-      qrcode.generate(qr, { small: true })
-      console.log('Silakan scan QR ini dengan WhatsApp kamu')
-    }
+    // Simpan auth state
+    sock.ev.on('creds.update', saveCreds)
 
-    if (connection === 'open') {
-      console.log('✅ Berhasil terhubung ke WhatsApp')
-    }
+    // Balas otomatis sesuai kata kunci
+    sock.ev.on('messages.upsert', async ({ messages, type }) => {
+        if (type !== 'notify') return
+        const msg = messages[0]
+        if (!msg.message || msg.key.fromMe) return
 
-    if (connection === 'close') {
-      const statusCode = lastDisconnect?.error?.output?.statusCode
-      if (statusCode === DisconnectReason.loggedOut) {
-        console.log('❌ Session telah logout, hapus file auth_info.json dan scan QR ulang')
-      } else {
-        console.log('⚠️ Koneksi terputus, mencoba reconnect...')
-        startSock()
-      }
-    }
-  })
+        const text = msg.message.conversation || msg.message.extendedTextMessage?.text
+        const sender = msg.key.remoteJid
 
-  // Simpan sesi setiap ada perubahan
-  sock.ev.on('creds.update', saveState)
+        const keywords = {
+            halo: 'Hai juga!',
+            pagi: 'Selamat pagi ☀️',
+            siang: 'Selamat siang 🌤️',
+            sore: 'Selamat sore 🌇',
+            malam: 'Selamat malam 🌙',
+            capek: 'Semangat ya! 💪',
+            sedih: 'Jangan sedih, aku ada kok 🥺',
+            salam: 'Waalaikumussalam',
+            bot: 'Aku di sini! 🤖'
+        }
 
-  return sock
+        const reply = keywords[text?.toLowerCase()]
+        if (reply) {
+            await sock.sendMessage(sender, { text: reply }, { quoted: msg })
+        }
+    })
 }
 
-startSock()
+startBot()
+
