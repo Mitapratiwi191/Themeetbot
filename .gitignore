@@ -1,0 +1,28 @@
+# Abaikan folder kredensial login Baileys
+auth_info/
+
+# Abaikan modul yang terinstall via npm
+node_modules/
+
+# Abaikan file log
+*.log
+npm-debug.log*
+
+# Abaikan file cache atau temp
+.DS_Store
+*.tmp
+*.swp
+
+# Abaikan file env (jika kamu pakai dotenv nanti)
+.env
+
+# Abaikan backup atau file editor
+*.bak
+*.old
+*.sublime-workspace
+*.code-workspace
+
+# Abaikan folder output atau hasil build (jika ada)
+dist/
+build/
+out/
